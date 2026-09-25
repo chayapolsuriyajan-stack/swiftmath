@@ -4,3 +4,6 @@ dist
 .env*.local
 scripts/train/data
 scripts/train/train.log
+
+.vercel
+.env*
