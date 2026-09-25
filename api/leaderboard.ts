@@ -1,4 +1,4 @@
-import { CATS, ID_RE, json, keys, LEVELS, redis } from './_redis';
+import { CATS, ID_RE, json, keys, LEVELS, redis } from './_redis.js';
 
 const LIMIT = 50;
 

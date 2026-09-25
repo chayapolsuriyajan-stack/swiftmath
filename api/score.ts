@@ -1,5 +1,5 @@
-import { CATEGORIES, MISTAKE_PENALTY_MS, stars as starsFor } from '../src/game/levels';
-import { CATS, clientIp, ID_RE, json, keys, LEVELS, redis } from './_redis';
+import { CATEGORIES, MISTAKE_PENALTY_MS, stars as starsFor } from '../src/game/levels.js';
+import { CATS, clientIp, ID_RE, json, keys, LEVELS, redis } from './_redis.js';
 
 const RATE_LIMIT = 30; // submissions per IP per minute
 const MIN_MS_PER_QUESTION = 400;

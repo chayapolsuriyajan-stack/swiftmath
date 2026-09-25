@@ -1,4 +1,4 @@
-import { binary, hasBorrow, hasCarry, int, pick, unknown, type Op, type Problem, type Rng } from './generator';
+import { binary, hasBorrow, hasCarry, int, pick, unknown, type Op, type Problem, type Rng } from './generator.js';
 
 export type CategoryId = 'add' | 'sub' | 'mul' | 'div' | 'mix' | 'alg';
 
