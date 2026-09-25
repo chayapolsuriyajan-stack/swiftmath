@@ -1,4 +1,4 @@
-import { CATS, ID_RE, json, keys, LEVELS, redis } from './_redis.js';
+import { CATS, ID_RE, json, keys, LEVELS, redis, unavailable } from './_redis.js';
 
 const LIMIT = 50;
 
@@ -12,6 +12,8 @@ interface Entry {
 }
 
 export async function GET(req: Request) {
+  const down = unavailable();
+  if (down) return down;
   const url = new URL(req.url);
   const cat = url.searchParams.get('cat') ?? 'global';
   const id = url.searchParams.get('id') ?? '';

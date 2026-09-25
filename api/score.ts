@@ -1,5 +1,5 @@
 import { CATEGORIES, MISTAKE_PENALTY_MS, stars as starsFor } from '../src/game/levels.js';
-import { CATS, clientIp, ID_RE, json, keys, LEVELS, redis } from './_redis.js';
+import { CATS, clientIp, ID_RE, json, keys, LEVELS, redis, unavailable } from './_redis.js';
 
 const RATE_LIMIT = 30; // submissions per IP per minute
 const MIN_MS_PER_QUESTION = 400;
@@ -34,6 +34,8 @@ const cleanName = (s: string) =>
     .slice(0, 16) || 'Player';
 
 export async function POST(req: Request) {
+  const down = unavailable();
+  if (down) return down;
   let body: Partial<Body>;
   try {
     body = await req.json();

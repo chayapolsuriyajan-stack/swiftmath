@@ -35,7 +35,7 @@ const fake = vi.hoisted(() => {
   return redis;
 });
 
-vi.mock('../api/_redis', async (orig) => ({ ...(await orig<typeof import('../api/_redis')>()), redis: fake }));
+vi.mock('../api/_redis', async (orig) => ({ ...(await orig<typeof import('../api/_redis')>()), redis: fake, unavailable: () => null }));
 
 const { POST } = await import('../api/score');
 const { GET } = await import('../api/leaderboard');
