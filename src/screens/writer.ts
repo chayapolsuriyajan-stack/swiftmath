@@ -9,7 +9,8 @@ let penSeen = false;
 export interface Writer {
   el: HTMLElement;
   pad: InkPad;
-  clear: () => void;
+  /** clear the pad; `fade` lets the ink linger and fade out */
+  clear: (fade?: boolean) => void;
   hint: (text: string) => void;
   destroy: () => void;
 }
@@ -47,7 +48,7 @@ export function createWriter(o: WriterOpts): Writer {
       const others = pad.strokes.slice(0, -1);
       if (others.length) {
         const b = bbox(others);
-        if (isScratchOut(s, b.maxY - b.minY)) return clear();
+        if (isScratchOut(s, b.maxY - b.minY)) return clear(true);
       }
       o.onStroke?.(pad.strokes);
       const ms = o.pauseMs();
@@ -56,9 +57,9 @@ export function createWriter(o: WriterOpts): Writer {
     },
   });
 
-  function clear() {
+  function clear(fade = false) {
     cancel();
-    pad.clear();
+    pad.clear(fade);
     o.onClear?.();
   }
 
@@ -67,7 +68,7 @@ export function createWriter(o: WriterOpts): Writer {
     null,
     pad.el,
     hintEl,
-    h('div.pad-tools', null, ...(o.tools ?? []), iconBtn(icon.erase, 'Clear', clear)),
+    h('div.pad-tools', null, ...(o.tools ?? []), iconBtn(icon.erase, 'Clear', () => clear())),
   );
 
   return {

@@ -43,7 +43,7 @@ export function homeScreen(root: HTMLElement) {
     h(
       'div.home-actions',
       null,
-      withIcon('button.btn.small', icon.trophy, 'Leaderboard', () => nav('#/board')),
+      withIcon('button.btn.small', icon.trophy, 'High scores', () => nav('#/board')),
       withIcon('button.btn.small', icon.pen, 'Handwriting', () => nav('#/calibrate')),
       withIcon('button.btn.small', icon.gear, 'Settings', () => nav('#/settings')),
     ),

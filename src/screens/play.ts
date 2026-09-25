@@ -3,7 +3,7 @@ import { category, MISTAKE_PENALTY_MS, QUESTIONS, stars as starsFor } from '../g
 import type { Stroke } from '../ink/stroke';
 import type { Reading, Recognizer } from '../recognizer';
 import { persistSamples, profile, recognizer, saveProfiles, state } from '../state';
-import { recordRun, submitScore } from '../store/scores';
+import { localRank, recordRun } from '../store/scores';
 import { fmtTime, h, icon, iconBtn, nav, starsEl } from '../ui';
 import { createWriter } from './writer';
 
@@ -36,6 +36,7 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
   const fill = h('i', { style: { width: '0%' } });
   const timer = h('div.timer.tabular', null, '0.0');
   const problemEl = h('div.problem');
+  const nextEl = h('div.problem-next', { 'aria-hidden': 'true' });
   const reading = h('div.reading');
   const skipBtn = iconBtn(icon.skip, 'Skip', () => skip());
 
@@ -53,24 +54,32 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
   const countdown = h('div.countdown');
   root.append(
     h('div.play-top', null, iconBtn(icon.close, 'Quit', () => nav(`#/cat/${cat.id}`)), h('div.bar', null, fill), timer),
-    h('div.problem-area', null, problemEl, reading),
+    h('div.problem-area', null, problemEl, nextEl, reading),
     writer.el,
   );
 
   // ---------- rendering ----------
   let slotEl: HTMLElement | null = null;
-  function renderProblem(p: Problem) {
+  const tokens = (p: Problem, live: boolean) =>
+    p.parts.map((t) => {
+      if (t === SLOT) {
+        const el = h('span.slot', null, '?');
+        if (live) slotEl = el;
+        return el;
+      }
+      return h('span', { class: /^[+−×÷=]$/.test(t) ? 'op' : '' }, t);
+    });
+
+  /** current problem, plus a faint preview of the one after it */
+  function renderProblem(p: Problem, upcoming?: Problem, advance = false) {
     slotEl = null;
-    problemEl.replaceChildren(
-      ...p.parts.map((t) => {
-        if (t === SLOT) return (slotEl = h('span.slot', null, '?'));
-        const isOp = /^[+−×÷=]$/.test(t);
-        return h('span', { class: isOp ? 'op' : '' }, t);
-      }),
-    );
-    problemEl.classList.remove('pop');
-    void problemEl.offsetWidth;
-    problemEl.classList.add('pop');
+    problemEl.replaceChildren(...tokens(p, true));
+    nextEl.replaceChildren(...(upcoming ? tokens(upcoming, false) : []));
+    for (const [el, cls] of [[problemEl, advance ? 'rise' : 'pop'], [nextEl, 'fade-in']] as const) {
+      el.classList.remove('rise', 'pop', 'fade-in');
+      void el.offsetWidth;
+      el.classList.add(cls);
+    }
   }
 
   function setSlot(text: string, cls: '' | 'good' | 'bad') {
@@ -128,6 +137,7 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
     state.warmedUp = true;
     writer.clear();
     problemEl.replaceChildren();
+    nextEl.replaceChildren();
     reading.textContent = '';
     timer.textContent = '0.0';
     fill.style.width = '0%';
@@ -150,7 +160,7 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
     idx = mistakes = penalty = 0;
     phase = 'playing';
     t0 = performance.now();
-    renderProblem(problems[0]);
+    renderProblem(problems[0], problems[1]);
     writer.hint('Write the answer');
     tick();
   }
@@ -158,9 +168,12 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
   function next() {
     idx++;
     fill.style.width = `${(idx / QUESTIONS) * 100}%`;
-    writer.clear();
-    if (idx >= problems.length) return finish();
-    renderProblem(problems[idx]);
+    writer.clear(true);
+    if (idx >= problems.length) {
+      nextEl.replaceChildren();
+      return finish();
+    }
+    renderProblem(problems[idx], problems[idx + 1], true);
   }
 
   // ---------- input ----------
@@ -210,7 +223,7 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
       locked = false;
       timer.classList.remove('penalty');
       if (!alive) return;
-      writer.clear();
+      writer.clear(true);
     }, 450);
   }
 
@@ -220,7 +233,7 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
     locked = true;
     setTimeout(() => {
       locked = false;
-      if (alive) writer.clear();
+      if (alive) writer.clear(true);
       reading.textContent = '';
     }, 500);
   }
@@ -275,10 +288,11 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
     const total = Math.round(performance.now() - t0 + penalty);
     timer.textContent = fmtTime(total);
     const st = starsFor(level!, total);
-    const { prev, isBest } = await recordRun(cat!.id, lvlIdx, { ms: total, mistakes, at: Date.now() }, st);
+    const at = Date.now();
+    const { prev, isBest } = await recordRun(cat!.id, lvlIdx, { ms: total, mistakes, at }, st);
     if (!alive) return;
 
-    const rankEl = h('div.muted', { style: { fontSize: '14px', minHeight: '20px' } }, 'Checking leaderboard…');
+    const rankEl = h('div.muted', { style: { fontSize: '14px', minHeight: '20px' } }, '');
     const hasNext = lvlIdx + 1 < cat!.levels.length;
     const sheet = h(
       'div.overlay',
@@ -315,8 +329,8 @@ export function playScreen(root: HTMLElement, [catId, lvlStr]: string[]) {
       setTimeout(() => s.classList.add('on'), 150 + i * 160);
     });
 
-    const res = await submitScore({ cat: cat!.id, lvl: lvlIdx, timeMs: total, mistakes, questions: QUESTIONS, stars: st });
-    rankEl.textContent = res ? `#${res.rank} worldwide on this level` : navigator.onLine ? 'Leaderboard unavailable' : 'Offline — score will sync later';
+    const rank = await localRank(cat!.id, lvlIdx, at);
+    if (alive) rankEl.textContent = rank ? `#${rank} on this device · ${isBest ? 'personal best' : 'best ' + fmtTime(prev!.bestMs)}` : '';
   }
 
   function restart() {

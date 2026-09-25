@@ -15,6 +15,7 @@ export interface Progress {
   lvl: number;
   bestMs: number;
   bestMistakes: number;
+  bestAt?: number;
   stars: number;
   plays: number;
   runs: Run[];
@@ -39,13 +40,63 @@ export async function recordRun(cat: CategoryId, lvl: number, run: Run, stars: n
   if (isBest) {
     next.bestMs = run.ms;
     next.bestMistakes = run.mistakes;
+    next.bestAt = run.at;
   }
   next.stars = Math.max(next.stars, stars);
   await db.put('progress', next);
   return { prev, next, isBest };
 }
 
-// ---- online leaderboard ----
+// ---- local highscores (all players on this device) ----
+
+export interface LocalEntry {
+  rank: number;
+  name: string;
+  profile: string;
+  ms: number;
+  mistakes: number;
+  at: number;
+}
+
+/** Fastest runs for a level across every player on this device. */
+export async function localBoard(cat: CategoryId, lvl: number, limit = 20): Promise<LocalEntry[]> {
+  const names = new Map(state.profiles.map((p) => [p.id, p.name]));
+  const rows = (await db.all<Progress>('progress')).filter((r) => r.cat === cat && r.lvl === lvl && names.has(r.profile));
+  const runs: Omit<LocalEntry, 'rank'>[] = [];
+  for (const r of rows) {
+    const seen = new Set<number>();
+    const all = r.bestAt ? [{ ms: r.bestMs, mistakes: r.bestMistakes, at: r.bestAt }, ...r.runs] : r.runs;
+    for (const run of all) {
+      if (seen.has(run.at)) continue;
+      seen.add(run.at);
+      runs.push({ ...run, profile: r.profile, name: names.get(r.profile)! });
+    }
+  }
+  runs.sort((a, b) => a.ms - b.ms || a.mistakes - b.mistakes || a.at - b.at);
+  return runs.slice(0, limit).map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+/** Rank of a run among all runs of that level on this device (1-based). */
+export async function localRank(cat: CategoryId, lvl: number, at: number): Promise<number | null> {
+  const board = await localBoard(cat, lvl, 1000);
+  return board.find((e) => e.at === at)?.rank ?? null;
+}
+
+/** Total best stars per player on this device. */
+export async function localStars(): Promise<{ rank: number; name: string; profile: string; stars: number; levels: number }[]> {
+  const rows = await db.all<Progress>('progress');
+  const out = state.profiles.map((p) => {
+    const mine = rows.filter((r) => r.profile === p.id);
+    return { name: p.name, profile: p.id, stars: mine.reduce((a, r) => a + r.stars, 0), levels: mine.length, rank: 0 };
+  });
+  out.sort((a, b) => b.stars - a.stars || b.levels - a.levels);
+  out.forEach((e, i) => (e.rank = i > 0 && out[i - 1].stars === e.stars ? out[i - 1].rank : i + 1));
+  return out;
+}
+
+// ---- online leaderboard (off for now: needs a Redis store on Vercel, see api/) ----
+
+export const ONLINE = false;
 
 export interface ScoreSubmission {
   deviceId: string;
@@ -73,6 +124,7 @@ export interface Board {
 }
 
 export async function submitScore(s: Omit<ScoreSubmission, 'deviceId' | 'nickname'>): Promise<{ rank: number } | null> {
+  if (!ONLINE) return null;
   const body: ScoreSubmission = { ...s, deviceId: `${state.settings.deviceId}:${state.settings.profileId}`, nickname: profile()!.name };
   try {
     const res = await fetch('/api/score', {
@@ -90,7 +142,7 @@ export async function submitScore(s: Omit<ScoreSubmission, 'deviceId' | 'nicknam
 }
 
 export async function flushQueue() {
-  if (!navigator.onLine) return;
+  if (!ONLINE || !navigator.onLine) return;
   const keys = await db.allKeys('queue');
   for (const k of keys) {
     const body = await db.get<ScoreSubmission>('queue', k);

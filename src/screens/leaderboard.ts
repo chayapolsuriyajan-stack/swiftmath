@@ -1,9 +1,11 @@
 import { CATEGORIES, type CategoryId } from '../game/levels';
-import { fetchBoard, type Board, type BoardEntry } from '../store/scores';
+import { state } from '../state';
+import { localBoard, localStars } from '../store/scores';
 import { fmtTime, h, topbar } from '../ui';
 
+/** High scores for everyone who plays on this device. */
 export function boardScreen(root: HTMLElement, [catArg, lvlArg]: string[]) {
-  let cat: CategoryId | 'global' = (catArg as CategoryId) || 'global';
+  let cat: CategoryId | 'stars' = (CATEGORIES.some((c) => c.id === catArg) ? catArg : 'stars') as CategoryId | 'stars';
   let lvl = Number(lvlArg) || 0;
   let seq = 0;
 
@@ -12,11 +14,11 @@ export function boardScreen(root: HTMLElement, [catArg, lvlArg]: string[]) {
     {
       'aria-label': 'Category',
       onchange: () => {
-        cat = catSel.value as CategoryId | 'global';
+        cat = catSel.value as CategoryId | 'stars';
         load();
       },
     },
-    h('option', { value: 'global' }, 'All stars'),
+    h('option', { value: 'stars' }, 'Total stars'),
     ...CATEGORIES.map((c) => h('option', { value: c.id }, c.name)),
   );
   const lvlSel = h(
@@ -34,36 +36,54 @@ export function boardScreen(root: HTMLElement, [catArg, lvlArg]: string[]) {
   lvlSel.value = String(lvl);
   const list = h('div.list');
 
-  root.append(topbar('Leaderboard', '#/'), h('div.board-controls', null, catSel, lvlSel), list);
+  root.append(
+    topbar('High scores', '#/'),
+    h('div.board-controls', null, catSel, lvlSel),
+    list,
+    h('p.muted', { style: { fontSize: '13px', textAlign: 'center', marginTop: '24px' } }, 'Scores are kept on this device.'),
+  );
 
   async function load() {
-    lvlSel.hidden = cat === 'global';
+    lvlSel.hidden = cat === 'stars';
     const my = ++seq;
-    list.replaceChildren(h('div.empty', null, 'Loading…'));
-    const board = await fetchBoard(cat, cat === 'global' ? undefined : lvl);
-    if (my === seq) render(board);
+    const me = state.settings.profileId;
+    if (cat === 'stars') {
+      const rows = await localStars();
+      if (my !== seq) return;
+      if (!rows.some((r) => r.stars)) return empty();
+      list.replaceChildren(
+        ...rows.map((r) =>
+          row(r.rank, r.name, `${r.levels} level${r.levels === 1 ? '' : 's'} played`, `${r.stars} ★`, r.profile === me),
+        ),
+      );
+      return;
+    }
+    const rows = await localBoard(cat, lvl);
+    if (my !== seq) return;
+    if (!rows.length) return empty();
+    const fmtDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+    list.replaceChildren(
+      ...rows.map((r) =>
+        row(
+          r.rank,
+          r.name,
+          `${r.mistakes ? `${r.mistakes} mistake${r.mistakes > 1 ? 's' : ''} · ` : ''}${fmtDate.format(r.at)}`,
+          fmtTime(r.ms),
+          r.profile === me,
+        ),
+      ),
+    );
   }
 
-  function render(b: Board | null) {
-    if (!b) return list.replaceChildren(h('div.empty', null, navigator.onLine ? 'Leaderboard unavailable right now.' : 'You are offline.'));
-    if (!b.top.length) return list.replaceChildren(h('div.empty', null, 'No scores yet. Be the first!'));
-    const rows: Node[] = b.top.map(row);
-    if (b.me && !b.top.some((e) => e.me)) rows.push(h('div.muted', { style: { textAlign: 'center' } }, '⋯'), row(b.me));
-    list.replaceChildren(...rows);
-  }
+  const empty = () => list.replaceChildren(h('div.empty', null, 'No scores yet. Play a level to set one!'));
 
-  function row(e: BoardEntry) {
+  function row(rank: number, name: string, sub: string, value: string, mine: boolean) {
     return h(
       'div.row',
-      { class: e.me ? 'me' : '' },
-      h('span.rank', { class: e.rank === 1 ? 'r1' : '' }, e.rank),
-      h(
-        'div.grow',
-        null,
-        h('div', { style: { fontWeight: '600' } }, e.nickname),
-        cat !== 'global' && e.mistakes ? h('div.sub', null, `${e.mistakes} mistake${e.mistakes > 1 ? 's' : ''}`) : null,
-      ),
-      h('b.tabular', null, cat === 'global' ? `${e.score} ★` : fmtTime(e.timeMs ?? e.score)),
+      { class: mine ? 'me' : '' },
+      h('span.rank', { class: rank === 1 ? 'r1' : '' }, rank),
+      h('div.grow', null, h('div', { style: { fontWeight: '600' } }, name), h('div.sub', null, sub)),
+      h('b.tabular', null, value),
     );
   }
 

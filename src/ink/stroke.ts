@@ -3,6 +3,8 @@ export interface Point {
   y: number;
   t: number;
   p: number;
+  /** pencil tilt 0 (upright) .. 1 (flat on its side) */
+  a?: number;
 }
 
 export type Stroke = Point[];

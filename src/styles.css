@@ -5,7 +5,7 @@
   --line: #e3e3e8;
   --text: #16171a;
   --muted: #8a8b93;
-  --ink: #16171a;
+  --ink: #34353b; /* graphite */
   --good: #22a55b;
   --bad: #e5484d;
   --warn: #f5a524;
@@ -32,7 +32,7 @@
     --line: #2a2b31;
     --text: #f2f2f5;
     --muted: #8e8f98;
-    --ink: #f2f2f5;
+    --ink: #dcdce2;
     --accent: #6d93ff;
     --c-add: #6d93ff;
     --c-sub: #ff8a5c;
@@ -260,6 +260,29 @@ input, select {
 @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 .problem.pop { animation: pop 0.18s ease-out; }
 @keyframes pop { from { transform: scale(0.94); opacity: 0.4; } }
+
+.problem.rise { animation: rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes rise { from { transform: translateY(0.9em) scale(0.45); opacity: 0.3; } }
+
+/* the upcoming problem, previewed faintly under the current one */
+.problem-next {
+  font-family: var(--round);
+  font-size: clamp(22px, 4.6vmin, 44px);
+  font-weight: 600;
+  display: flex; align-items: center; gap: 0.28em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-top: clamp(6px, 1.4vh, 14px);
+  min-height: 1.2em;
+  opacity: 0.28;
+}
+.problem-next .slot {
+  min-width: 1.3em; padding: 0 0.12em; border-radius: 0.18em;
+  display: inline-grid; place-items: center;
+  background: var(--surface-2); color: var(--muted);
+}
+.problem-next.fade-in { animation: fade-next 0.3s ease-out; }
+@keyframes fade-next { from { opacity: 0; transform: translateY(8px); } }
 
 .reading {
   height: 26px; margin-top: 10px;
